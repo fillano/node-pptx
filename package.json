@@ -1,0 +1,16 @@
+{
+  "name": "node-pptx",
+  "version": "0.0.1",
+  "description": "simple pptx tools.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "fillano.feng@gmail.com",
+  "license": "MIT",
+  "dependencies": {
+    "minimist": "^1.2.0",
+    "node-stream-zip": "^1.3.5",
+    "xml2js": "^0.4.17"
+  }
+}
