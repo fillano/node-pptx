@@ -1,8 +1,12 @@
 {
   "name": "node-pptx",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "simple pptx tools.",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fillano/node-pptx.git"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,6 +14,7 @@
   "license": "MIT",
   "dependencies": {
     "minimist": "^1.2.0",
+    "node-pptx-parser": "fillano/node-pptx-parser",
     "node-stream-zip": "^1.3.5",
     "xml2js": "^0.4.17"
   }

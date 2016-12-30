@@ -11,7 +11,7 @@ const xml2js = require('xml2js')
 , path = require('path')
 , fs = require('fs');
 
-let result = {};
+//let result = {};
 let media = {};
 
 zip.on('ready', () => {
@@ -26,10 +26,17 @@ zip.on('ready', () => {
 	Promise.all(objs.reduce((pre, cur) => {
 		if(cur.indexOf('.rels') > -1 || cur.indexOf('.xml') > -1) {
 			let p = new Promise((resolve, reject) => {
-				let parser = new xml2js.Parser();
+				let parser = new xml2js.Parser({
+					async: true,
+					explicitRoot: false,
+					preserveChildrenOrder: true, 
+					explicitArray: false, 
+					explicitChildren: true
+				});
 				parser.parseString(zip.entryDataSync(cur).toString(), (err, data) => {
+					console.log('parsing ' + cur);
 					if(!!err) return reject(err);
-					resolve({file: cur, data: data});
+					resolve({file: cur, data: strip(data)});
 				});
 			});
 			pre.push(p);
@@ -43,15 +50,24 @@ zip.on('ready', () => {
 		return pre;
 	}, []))
 	.then(objs => {
-		objs.forEach(obj => {
-			if(obj.file.indexOf('.rels') > -1 || obj.file.indexOf('.xml') > -1)
-				result[obj.file] = obj.data;
-		});
+		let result = {};
 		return new Promise((resolve, reject) => {
-			fs.writeFile(argv._[1] + path.sep + 'main.json', JSON.stringify(result, null, 2), {encoding: 'utf-8'}, err => {
-				if(!!err) return reject(err);
-				resolve(objs);
+			objs.forEach(obj => {
+				if(obj.file.indexOf('.rels') > -1 || obj.file.indexOf('.xml') > -1)
+					result[obj.file] = obj.data;
 			});
+			if(argv['m'] === 1) {
+				let data = require('node-pptx-parser')(result);
+				fs.writeFile(argv._[1] + path.sep + 'main.json', JSON.stringify(data, null, 2), {encoding: 'utf-8'}, err => {
+					if(!!err) return reject(err);
+					resolve(objs);
+				});
+			} else {
+				fs.writeFile(argv._[1] + path.sep + 'main.json', JSON.stringify(result, null, 2), {encoding: 'utf-8'}, err => {
+					if(!!err) return reject(err);
+					resolve(objs);
+				});
+			}
 		});
 	}, (reason) => {
 		console.error(reason);
@@ -90,5 +106,28 @@ zip.on('ready', () => {
 });
 
 function help() {
-	console.log('[Usage] node node-pptx [path to pptx file] [export directory]');
+	console.log('[Usage] node node-pptx [options] [path to pptx file] [export directory]');
+	console.log('options:');
+	console.log('\t-m 0 : export json directly converted from xml.(default)');
+	console.log('\t-m 1 : export parsed json other than original one by -m 0 option.');
+}
+
+let depth = 0;
+function strip(obj) {
+	depth++;
+	console.log('strip entered.', depth);
+	for(let i in obj) {
+		if(obj.hasOwnProperty(i) && i !== '$' && i !== '$$' && i !== '#name') {
+			delete obj[i];
+		}
+	}
+	if(!!obj.$$) {
+		let tmp = obj.$$.reduce((pre, cur) => {
+			pre.push(strip(cur));
+			return pre;
+		}, []);
+		obj.$$ = tmp;
+	}
+	depth--;
+	return obj;
 }
