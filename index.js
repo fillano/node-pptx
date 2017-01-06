@@ -31,12 +31,22 @@ zip.on('ready', () => {
 					explicitRoot: false,
 					preserveChildrenOrder: true, 
 					explicitArray: false, 
-					explicitChildren: true
+					explicitChildren: true,
+					trim: true,
+					attrValueProcessors: [function(name) {
+						//no direct float value in ECMA-376 attribute
+						if(name.search(/^-*[0-9]+$/) === 0) {
+							return parseInt(name, 10);
+						} else {
+							return name;
+						}
+					}]
 				});
 				parser.parseString(zip.entryDataSync(cur).toString(), (err, data) => {
 					console.log('parsing ' + cur);
 					if(!!err) return reject(err);
 					resolve({file: cur, data: strip(data)});
+					//resolve({file: cur, data: data});
 				});
 			});
 			pre.push(p);
@@ -112,12 +122,12 @@ function help() {
 	console.log('\t-m 1 : export parsed json other than original one by -m 0 option.');
 }
 
-let depth = 0;
+//let depth = 0;
 function strip(obj) {
-	depth++;
-	console.log('strip entered.', depth);
+	//depth++;
+	//console.log('strip entered.', depth);
 	for(let i in obj) {
-		if(obj.hasOwnProperty(i) && i !== '$' && i !== '$$' && i !== '#name') {
+		if(obj.hasOwnProperty(i) && i !== '$' && i !== '$$' && i !== '#name' && i !== '_') {
 			delete obj[i];
 		}
 	}
@@ -128,6 +138,6 @@ function strip(obj) {
 		}, []);
 		obj.$$ = tmp;
 	}
-	depth--;
+	//depth--;
 	return obj;
 }
