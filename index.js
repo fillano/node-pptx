@@ -11,7 +11,6 @@ const xml2js = require('xml2js')
 , path = require('path')
 , fs = require('fs');
 
-//let result = {};
 let media = {};
 
 zip.on('ready', () => {
@@ -68,13 +67,21 @@ zip.on('ready', () => {
 			});
 			if(argv['m'] === 1) {
 				let data = require('node-pptx-parser')(result);
-				fs.writeFile(argv._[1] + path.sep + 'main.json', JSON.stringify(data, null, 2), {encoding: 'utf-8'}, err => {
+				fs.writeFile(argv._[1] + path.sep + 'main.js', 'var data = ' + JSON.stringify(data, null, 2), {encoding: 'utf-8'}, err => {
 					if(!!err) return reject(err);
-					resolve(objs);
+					console.log('writing ' + argv._[1] + path.sep + 'main.js');
+					let rs = fs.createReadStream(__dirname + path.sep + 'template.html', {encoding:'utf-8'});
+					let ws = fs.createWriteStream(argv._[1] + path.sep + 'index.html', {defaultEncoding:'utf-8'});
+					ws.on('finish', () => {
+						console.log('writing ' + argv._[1] + path.sep + 'index.html');
+						resolve(objs);
+					});
+					rs.pipe(ws);
 				});
 			} else {
 				fs.writeFile(argv._[1] + path.sep + 'main.json', JSON.stringify(result, null, 2), {encoding: 'utf-8'}, err => {
 					if(!!err) return reject(err);
+					console.log('writing ' + argv._[1] + path.sep + 'main.json');
 					resolve(objs);
 				});
 			}
@@ -84,10 +91,13 @@ zip.on('ready', () => {
 	})
 	.then(objs => {
 		return new Promise((resolve, reject) => {
-			fs.mkdir(argv._[1] + path.sep + 'media', err => {
+			fs.mkdir(argv._[1] + path.sep + 'ppt', err => {
 				if(!!err) return reject(err);
-				resolve(objs);
-			})
+				fs.mkdir(argv._[1] + path.sep + 'ppt' + path.sep + 'media', err => {
+					if(!!err) return reejct(err);
+					resolve(objs);
+				});
+			});
 		});
 	}, reason => {
 		console.error(reason);
@@ -99,9 +109,10 @@ zip.on('ready', () => {
 			return false;
 		}).reduce((pre, cur) => {
 			let p = new Promise((resolve, reject) => {
-				let filename = argv._[1] + path.sep + 'media' + path.sep + cur.file.split(path.sep)[cur.file.split(path.sep).length-1];
+				let filename = argv._[1] + path.sep + 'ppt' + path.sep + 'media' + path.sep + cur.file.split(path.sep)[cur.file.split(path.sep).length-1];
 				fs.writeFile(filename, cur.data, err => {
 					if(!!err) return reject(err);
+					console.log('writing ' + filename);
 					resolve();
 				});			
 			});
@@ -112,7 +123,6 @@ zip.on('ready', () => {
 	.then(() => {
 		console.log('done.');
 	});
-
 });
 
 function help() {
@@ -122,10 +132,7 @@ function help() {
 	console.log('\t-m 1 : export parsed json other than original one by -m 0 option.');
 }
 
-//let depth = 0;
 function strip(obj) {
-	//depth++;
-	//console.log('strip entered.', depth);
 	for(let i in obj) {
 		if(obj.hasOwnProperty(i) && i !== '$' && i !== '$$' && i !== '#name' && i !== '_') {
 			delete obj[i];
@@ -138,6 +145,5 @@ function strip(obj) {
 		}, []);
 		obj.$$ = tmp;
 	}
-	//depth--;
 	return obj;
 }

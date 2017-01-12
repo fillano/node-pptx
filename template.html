@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        canvas {
+            background-color: white;
+        }
+
+        .mask_canvas {
+            position: absolute;
+            top: -50000px;
+            left: -50000px;
+        }
+
+        .next_canvas {
+            position: absolute;
+            top: -100000px;
+            left: -100000px;
+        }
+    </style>
+</head>
+<body style="background-color: #000;text-align: center;padding:0 0 0 0; margin: 0 0 0 0">
+<canvas id="canvas" width="800" height="600"></canvas>
+<canvas id="mask" class="mask_canvas" width="800" height="600"></canvas>
+<canvas id="next" class="next_canvas" width="800" height="600"></canvas>
+<br>
+<button id="step1">上一步</button>
+<button id="step2">下一步</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+<script src="main.js"></script>
+<script>
+    $(function () {
+        var canvas = $('#canvas')[0];
+
+        var presentationData = {};
+
+        var canvasData = {};
+
+        var slideList = [];
+
+        var currentSlide = 0;
+
+        var media = {};
+
+        var langmap = {
+            "zh-TW": "ea",
+            "zh-CN": "ea",
+            "en-US": "latin",
+            "en-GB": "latin"
+        };
+
+        var scriptmap = {
+            "zh-TW": 'Hant',
+            "zh-CN": 'Hans'
+        };
+        var fontmap = {};
+
+        presentationInit(data);
+
+        $('#step1').click(function() {
+            if(currentSlide > 0) {
+                currentSlide--;
+                slideInit(data, currentSlide);
+            }
+        });
+        $('#step2').click(function() {
+            if(currentSlide < slideList.length-1) {
+                currentSlide++;
+                slideInit(data, currentSlide);
+            }
+        });
+
+        $(document).on('keyup', function(e) {
+            if(e.keyCode === 39 || e.keyCode === 32) {
+                if(currentSlide < slideList.length-1) {
+                    currentSlide++;
+                    slideInit(data, currentSlide);
+                }
+            }
+            if(e.keyCode === 37) {
+                if(currentSlide > 0) {
+                    currentSlide--;
+                    slideInit(data, currentSlide);
+                }
+            }
+        });
+
+        function canvasInit() {
+            var vzw = document.documentElement.clientWidth;
+            var vzh = document.documentElement.clientHeight;
+            var _canvasd = calculateCanvasWidth(vzw, vzh);
+            var canvas = $('#canvas')[0];
+            var mask = $('#mask')[0];
+            var next = $('#next')[0];
+
+            canvasData.cw = _canvasd.w;
+            canvasData.ch = _canvasd.h;
+            canvasData.canvas = {
+                width: _canvasd.w,
+                height: _canvasd.h
+            };
+
+            canvas.width = _canvasd.w;
+            canvas.height = _canvasd.h;
+
+            canvasData.mask = {
+                width: _canvasd.w,
+                height: _canvasd.h
+            };
+            mask.width = _canvasd.w;
+            mask.height = _canvasd.h;
+
+            canvasData.next = {
+                width: _canvasd.w,
+                height: _canvasd.h
+            }
+            next.width = _canvasd.w;
+            next.height = _canvasd.h;
+        }
+
+        function presentationInit(data) {
+            canvasInit();
+
+            presentationData.cw = parseInt(data.presentation.slideSize.cx, 10);
+            presentationData.ch = parseInt(data.presentation.slideSize.cy, 10);
+            slideList = data.presentation.slideIdList.reduce(function(pre, cur) {
+                pre.push({rid:cur.rid, target:cur.target});
+                return pre;
+            }, []);
+            slideInit(data, 0);
+        }
+
+        function slideInit(data, idx) {
+            var layoutTarget = Object.keys(data.relations[slideList[idx].target]).filter(function(z) {
+                return z.search(/^ppt\/slideLayouts\/slideLayout[0-9]+\.xml$/) > -1;
+            })[0];
+            var masterTarget = Object.keys(data.relations[layoutTarget]).filter(function(z) {
+                return z.search(/^ppt\/slideMasters\/slideMaster[0-9]+\.xml$/) > -1;
+            })[0];
+            var themeTarget = Object.keys(data.relations[masterTarget]).filter(function(z) {
+                return z.search(/^ppt\/theme\/theme[0-9]+\.xml$/) > -1;
+            })[0];
+            fontmap = {
+                "+mj-lt": data.themes[themeTarget].fontScheme.majorFont.latin,
+                "+mj-ea": data.themes[themeTarget].fontScheme.majorFont.fonts,
+                "+mn-lt": data.themes[themeTarget].fontScheme.minorFont.latin,
+                "+mn-ea": data.themes[themeTarget].fontScheme.minorFont.fonts
+             };
+             media = {};
+
+             wait(data.slides[slideList[idx].rid].commonSlideData.shapes.reduce(function(pre, cur) {
+             	if(cur.type === 'pic') pre.push(cur.blip.embed);
+             	return pre;
+             }, []).reduce(function(pre, cur) {
+             	pre.push(preload(cur));
+             	return pre;
+             }, []), function() {
+	            drawSlide(data, slideList[idx].rid, $('#canvas')[0]);
+             });
+             function preload(url) {
+             	return function(done) {
+					var img = new Image();
+					img.src = url;
+					img.onload = function () {
+						media[url] = img;
+						done();
+					};
+             	}
+             }
+        }
+
+        function timingInit(data, idx) {
+            /*var timing = data.slideList[data.slideIdList[idx].rid].timing;
+             var steps = steBuilder(timing);
+             steps.reduce(function(pre, cur) {
+             var step = {};
+             var start = '';
+             }, []);*/
+        }
+
+        function stepBuilder(timing) {
+            /*var root = timing.timeNodeList.parallel;
+             var seq = root.childTimeNodeList.sequence.parallel;
+             var steps = seq.reduce(function(pre, cur) {
+             var start = cur;
+             while(start.startConditionList.filter(function(cond) {if(cond.delay === 'indefinite') {return false} else {return true}}).length === 0) {
+             start = start.childTimeNodeList.parallel[0];
+             }
+             pre.push(start);
+             return pre;
+             }, []);
+             return steps;*/
+        }
+
+        function drawSlide(data, idx, canvas) {
+            var slide = data.slides[idx];
+            if (!!slide.transition) {
+                var mask = $('#mask')[0];
+                var next = $('#next')[0];
+                var ctx_canvas = canvas.getContext('2d');
+                var ctx_mask = mask.getContext('2d');
+                var ctx_next = next.getContext('2d');
+                ctx_next.fillStyle = slide.colorScheme[slide.colorMap[slide.commonSlideData.background]];
+                ctx_next.fillRect(0, 0, next.width, next.height);
+                ctx_mask.fillStyle = slide.colorScheme[slide.colorMap[slide.commonSlideData.background]];
+                ctx_mask.fillRect(0, 0, mask.width, mask.height);
+                slide.shapes.forEach(function (shape, idx) {
+                    if (shape.type === 'shape') {
+                        drawShape(slide, idx, ctx_next);
+                    }
+                    if (shape.type === 'pic') {
+                        drawPic(slide, idx, ctx_next);
+                    }
+                });
+                drawTransition(slide.transition, ctx_canvas, ctx_next, ctx_mask);
+            } else {
+                var ctx = canvas.getContext('2d');
+                ctx.fillStyle = slide.colorScheme[slide.colorMap[slide.commonSlideData.background]];
+                ctx.fillRect(0, 0, canvasData.cw, canvasData.ch);
+                slide.commonSlideData.shapes.forEach(function (shape, idx) {
+                    if (shape.type === 'shape') {
+                        drawShape(slide, idx, ctx);
+                    }
+                    if (shape.type === 'pic') {
+                        drawPic(slide, idx, ctx);
+                    }
+                });
+            }
+        }
+
+        function drawShape(slide, idx, ctx) {
+            var canvasw = canvasData.cw;
+            var shape = slide.commonSlideData.shapes[idx];
+            if (!!shape.solidFill) {
+                ctx.fillStyle = slide.colorScheme[slide.colorMap[shape.solidFill]];
+                ctx.fillRect(
+                    emu2pixel(shape.x, presentationData.cw, canvasw),
+                    emu2pixel(shape.y, presentationData.cw, canvasw),
+                    emu2pixel(shape.cx, presentationData.cw, canvasw),
+                    emu2pixel(shape.cy, presentationData.cw, canvasw)
+                );
+            }
+            /*ctx.strokeStyle = '#7799BB';
+             ctx.strokeRect(
+             emu2pixel(shape.x, presentationData.cw, canvasw),
+             emu2pixel(shape.y, presentationData.cw, canvasw),
+             emu2pixel(shape.cx, presentationData.cw, canvasw),
+             emu2pixel(shape.cy, presentationData.cw, canvasw)
+             );*/
+            if (!!shape.textBody && !!shape.textBody.paragraphs && Array.isArray(shape.textBody.paragraphs) && shape.textBody.paragraphs.length > 0) {
+                drawTextblock(shape.textBody);
+            }
+
+            function drawTextblock(block) {
+                if(typeof block.lIns === 'undefined') block.lIns = 0;
+                if(typeof block.tIns === 'undefined') block.tIns = 0;
+                if(typeof block.rIns === 'undefined') block.rIns = 0;
+                if(typeof block.bIns === 'undefined') block.bIns = 0;
+                var x = shape.x + block.lIns, y = shape.y + block.tIns;
+                var cx = shape.x + shape.cx - block.rIns, cy = shape.y + shape.cy - block.bIns;
+                var lh = block.paragraphs.reduce(function(pre, cur) {
+                    var max = cur.runs
+                        .filter(function(x) {return x.type === 'r'})
+                        .reduce(function(pre1, cur1) {
+                            if(cur1.type === 'r' && cur1.sz > pre1) {
+                                return cur1.sz;
+                            } else {
+                                return pre1;
+                            }
+                        }, pre);
+                    if(max > pre) {
+                        return max;
+                    } else {
+                        return pre;
+                    }
+                }, 0);
+                var lineHeight = Math.round(pixel2emu(pt2pixel(lh, presentationData.cw, canvasData.cw) * 1.2, presentationData.cw, canvasData.cw));
+
+                if(!!block.anchor) {
+                    switch(block.anchor) {
+                        case 'b':
+                            y = shape.y + shape.cy - block.bIns - lineHeight;
+                            break;
+                        case 'ctr':
+                            y = Math.round(shape.y + (shape.cy - lineHeight) / 2);
+                            break;
+                    }
+                }
+
+                var linenum = 1;
+                block.paragraphs.forEach(function (paragraph, index) {
+                    var textOffX = x + (!!paragraph.marL?paragraph.marL:0) + (!!paragraph.indent?paragraph.indent:0);
+                    var buOffX = 0;
+                    if(!!paragraph.runs) {
+                        var tl = paragraph.runs.reduce(function(pre, cur) {
+                            if(cur.type === 'r' && !!cur.text) {
+                                pre += cur.text.length;
+                            }
+                            return pre;
+                        }, 0);
+                        if(!!paragraph.buFont && !!paragraph.buChar && !!paragraph.buClr && tl > 0) {
+                            buOffX = drawText(ctx, textOffX, y + lineHeight * linenum, paragraph.buFont, paragraph.buClr, paragraph.defRPr.sz, paragraph.buChar+' ');
+                            textOffX += buOffX + paragraph.spcBef;
+                            //textOffX = x + paragraph.marL + paragraph.indent + paragraph.spcBef;
+                        }
+                        paragraph.runs.forEach(function(run, index1) {
+                            if(run.type === 'r' && !!run.text) {
+                                for(var i=0; i<run.text.length; i++) {
+                                    if('undefined' === typeof run.ea || run.ea === null) run.ea = '+mj-ea';
+                                    if('undefined' === typeof run.latin || run.latin === null) run.ea = '+mj-lt';
+                                    if('undefined' === typeof run.lang || run.lang === null) run.lang = 'zh-TW';
+                                    
+                                    if(run.ea !== '+mj-ea' && run.ea !== '+mn-ea') {
+                                        var face = run.ea;
+                                    } else {
+	                                    var tmp = fontmap[run[langmap[run.lang]]];
+	                                    if(typeof tmp === 'string') {
+	                                        var face = tmp;
+	                                    } else {
+	                                        var face = tmp[scriptmap[run.lang]];
+	                                    }
+                                    }
+
+                                    ctx.font = !!run.b?'900 ':'' + !!run.i?'italic ':'' + pt2pixel(run.size, presentationData.cw, canvasData.cw) + 'px ' + face;
+                                    if(!block.spAutofit && pixel2emu(ctx.measureText(run.text[i]).width, presentationData.cw, canvasData.cw)+textOffX > cx) {
+                                        linenum++;
+                                        textOffX = x + paragraph.marL + paragraph.indent + buOffX + paragraph.spcBef;
+                                    }
+                                    textOffX += drawText(ctx, textOffX, y + lineHeight * linenum, face, (!!run.solidFill?run.solidFill:'tx1'), run.sz, run.text[i], run.b, run.i);
+                                }
+                            }
+                            if(run.type === 'br') {
+                                linenum++;
+                                textOffX = x + paragraph.marL + paragraph.indent + buOffX + paragraph.spcBef;
+                            }
+                        });
+                    }
+                    linenum++;
+                });
+                function drawText(ctx, hpos, vpos, font, color, size, str, b, i) {
+                    ctx.font = (!!b? ' 900 ':'') + (!!i?' italic ':'') + pt2pixel(size, presentationData.cw, canvasData.cw) + 'px ' + font;
+                    ctx.fillStyle = slide.colorScheme[slide.colorMap[color]];
+                    ctx.textBaseline = 'ideographic';
+                    ctx.fillText(str, emu2pixel(hpos, presentationData.cw, canvasData.cw), emu2pixel(vpos, presentationData.cw, canvasData.cw));
+                    var ret = pixel2emu(ctx.measureText(str).width, presentationData.cw, canvasData.cw);
+                    ctx.font = '';
+                    ctx.fillStyle = '';
+                    return ret;
+                }
+            }
+        }
+
+        function drawPic(slide, idx, ctx) {
+            var canvasw = canvasData.canvas.width;
+            var pic = slide.commonSlideData.shapes[idx];
+            var img = media[pic.blip.embed];
+        	if(typeof pic.blip.srcRect === 'undefined') pic.blip.srcRect = {l:0, r:0, t:0, b:0};
+            var picx = img.width, picy = img.height;
+            var l = pic.blip.srcRect.l / 100000, r = pic.blip.srcRect.r / 100000, t = pic.blip.srcRect.t / 100000, b = pic.blip.srcRect.b / 100000;
+            var offx = pic.x, offy = pic.y;
+            var cx = pic.cx, cy = pic.cy;
+
+            var sx = Math.round(picx * l), sy = Math.round(picy * t);
+            var sw = Math.round(picx - picx * (l + r)), sh = Math.round(picy - picy * (t + b));
+            var dx = emu2pixel(offx, presentationData.cw, canvasw), dy = emu2pixel(offy, presentationData.cw, canvasw);
+            var dw = emu2pixel(cx, presentationData.cw, canvasw), dh = emu2pixel(cy, presentationData.cw, canvasw);
+            ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+        }
+
+        function drawTransition(transition, target, next, mask) {
+            var start = null;
+            requestAnimationFrame(transitionAnimate);
+            function transitionAnimate(t) {
+                if (start === null) {
+                    start = t;
+                    requestAnimationFrame(transitionAnimate);
+                } else {
+                    var progress = (t - start) / transition.duration;
+                    mask.fillStyle = '#FFFFFF';
+                    mask.fillRect(0, 0, canvasData.canvas.width, canvasData.canvas.height);
+                    drawTransitionPattern(transition, mask, progress);
+                    var x = 0, y = 0;
+                    var maskImg = mask.getImageData(0, 0, canvasData.cw, canvasData.ch);
+                    var nextImg = next.getImageData(0, 0, canvasData.cw, canvasData.ch);
+                    var targetImg = target.getImageData(0, 0, canvasData.cw, canvasData.ch);
+                    var output = target.createImageData(targetImg);
+                    for (var i = 0; i < targetImg.data.length; i += 4) {
+                        if (maskImg.data[i] == 0 && maskImg.data[i + 1] == 0 && maskImg.data[i + 2] == 0) {
+                            output.data[i] = nextImg.data[i];
+                            output.data[i + 1] = nextImg.data[i + 1];
+                            output.data[i + 2] = nextImg.data[i + 2];
+                            output.data[i + 3] = 255;
+                        } else {
+                            output.data[i] = targetImg.data[i];
+                            output.data[i + 1] = targetImg.data[i + 1];
+                            output.data[i + 2] = targetImg.data[i + 2];
+                            output.data[i + 3] = 255;
+                        }
+                    }
+                    target.putImageData(output, 0, 0);
+                    if (t - start < transition.duration) {
+                        requestAnimationFrame(transitionAnimate);
+                    }
+                }
+            }
+        }
+
+        function drawTransitionPattern(transition, mask, progress) {
+            switch (transition.type) {
+                case 'comb':
+                    var num = 8;
+                    var start = 0;
+                    var side = 0;
+                    if (transition.dir === 'horz') {
+                        var bh = Math.round(canvasData.ch / num);
+                        while (start < canvasData.ch) {
+                            mask.fillStyle = '#000000';
+                            if (side % 2 === 0) {
+                                mask.fillRect(0, start, Math.round(progress * canvasData.cw), bh);
+                            } else {
+                                var l = Math.round(canvasData.cw * (1 - progress));
+                                mask.fillRect(Math.round(canvasData.cw * (1 - progress)), start, canvasData.cw - l, bh);
+                            }
+                            start += bh;
+                            side++;
+                        }
+                    } else {
+                        var bw = Math.round(canvasData.cw / num);
+                        while (start < canvasData.cw) {
+                            mask.fillStyle = '#000000';
+                            if (side % 2 === 0) {
+                                mask.fillRect(start, 0, bw, Math.round(progress * canvasData.ch));
+                            } else {
+                                var t = Math.round(canvasData.ch * (1 - progress));
+                                mask.fillRect(start, Math.round(canvasData.ch * (1 - progress)), bw, canvasData.ch - t);
+                            }
+                            start += bw;
+                            side++;
+                        }
+                    }
+                    break;
+            }
+        }
+
+        function pt2pixel(sz, screenw, canvasw) {
+            return Math.round(sz * 914400 * canvasw / 100 / 72 / screenw);
+        }
+
+        function emu2pixel(l, screenw, canvasw) {
+            return Math.round(l * canvasw / screenw);
+        }
+
+        function pixel2emu(l, screenw, canvasw) {
+            return Math.round(l * screenw / canvasw);
+        }
+
+        function calculateCanvasWidth(vzw, vzh) {
+            if (vzh / 3 * 4 < vzw) {
+                return {w: Math.round((vzh - 20) * 4 / 3), h: vzh - 20};
+            } else {
+                return {w: vzw - Math.round(20 * 4 / 3), h: Math.round(vzw * 3 / 4) - 20};
+            }
+        }
+
+        function define_quadratic_bezier(x0, y0, x1, y1, x2, y2) {
+            return function (t) {
+                if (t < 0 || t > 1) throw "[define_quadratic_bezier] t must between 0 and 1.";
+                var px = Math.pow(1 - t, 2) * x0 + 2 * t * (1 - t) * x1 + Math.pow(t, 2) * x2;
+                var py = Math.pow(1 - t, 2) * y0 + 2 * t * (1 - t) * y1 + Math.pow(t, 2) * y2;
+                return [px, py];
+            };
+        }
+
+        //this easing is from jquery's swing
+        function easing(p) {
+            return 0.5 - Math.cos(p * Math.PI) / 2;
+        }
+        
+        function wait(f, n) {
+        	var count = f.length;
+        	f.forEach(function(g) {
+        		g(done);
+        	});
+        	function done() {
+        		count--;
+        		if(count <= 0) {
+        			n();
+        		}
+        	}
+        }
+    });
+</script>
+</body>
+</html>
