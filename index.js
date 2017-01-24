@@ -31,7 +31,7 @@ zip.on('ready', () => {
 					preserveChildrenOrder: true, 
 					explicitArray: false, 
 					explicitChildren: true,
-					trim: true,
+					trim: false,
 					attrValueProcessors: [function(name) {
 						//no direct float value in ECMA-376 attribute
 						if(name.search(/^-*[0-9]+$/) === 0) {
