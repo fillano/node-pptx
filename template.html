@@ -233,11 +233,11 @@
         function drawShape(slide, idx, ctx) {
             var canvasw = canvasData.cw;
             var shape = slide.commonSlideData.shapes[idx];
-            if(!!shape.textBody && shape.textBody.spAutofit) {
+            /*if(!!shape.textBody && shape.textBody.spAutofit) {
             	var dim = measureTextBlock(ctx, shape.textBody, false);
             	shape.cx = shape.cx>dim.w?shape.cx:dim.w;
             	shape.cy = shape.cy>dim.h?shape.cy:dim.h;
-            }
+            }*/
 
             {
     			var orix = shape.x, oriy = shape.y;
@@ -302,11 +302,59 @@
 		            	ctx.fill();
 		            }
 	            }
-	            if(!!shape.line && !!shape.line.color && !! shape.line.w) {
+	            if(!!shape.line && !!shape.line.color && !!shape.line.w) {
 	            	var color = shape.line.color;
 	            	if(color.indexOf('#') !== 0) {
 	        			color = slide.colorScheme[slide.colorMap[color]];
+					}
+	            	if(!!shape.line.tailEnd || !!shape.line.tailEnd) {
+	            		ctx.lineJoin = 'miter';
 	            	}
+	            	if(!!shape.line.presetDash && shape.line.presetDash.length > 1 && shape.line.presetDash !== 'solid') {
+	            		var seg = [];
+	            		var pat = [];
+	            		switch(shape.line.presetDash) {
+	            			case 'dash':
+	            			pat = [4,4];
+	            			break;
+	            			case 'dashDot':
+	            			pat = [4,3,1,3];
+	            			break;
+	            			case 'dot':
+	            			pat = [1,3];
+	            			break;
+	            			case 'lgDash':
+	            			pat = [8,3];
+	            			break;
+	            			case 'lgDashDot':
+	            			pat = [8,3,1,3];
+	            			break;
+	            			case 'lgDashDotDot':
+	            			pat = [8,3,1,3,1,3];
+	            			break;
+	            			case 'sysDash':
+	            			pat = [3,1];
+	            			break;
+	            			case 'sysDashDot':
+	            			pat = [3,1,1,1];
+	            			break;
+	            			case 'sysDashDotDot':
+	            			pat = [3,1,1,1,1,1];
+	            			break;
+	            			case 'sysDot':
+	            			pat = [1,1];
+	            			break;
+	            			default:
+	            			throw 'presetDash pattern not supported.';
+	            			break;
+	            		}
+	            		pat.forEach(function(s) {
+	            			seg.push(emu2pixel(shape.line.w*s));
+	            		});
+	            		ctx.setLineDash(seg);
+	            	} else {
+            			ctx.setLineDash([]);
+            		}
 	            	ctx.lineWidth = emu2pixel(shape.line.w);
 	            	ctx.strokeStyle = color;
 	            	if(!!drawShapes[shape.preset]) {
@@ -383,7 +431,7 @@
                 	})
                 }
 
-                console.log(
+                /*console.log(
                 	'[shape and text pos] (preset,shape.x,shape.y,x,y,lineHeight1,txt,anchor)', 
                 	shape.preset,
                 	emu2pixel(shape.x), 
@@ -393,9 +441,9 @@
                 	emu2pixel(lineHeight1),
                 	txt,
                 	block.anchor
-            	);
+            	);*/
 
-                var linenum = 1;
+                var linenum = 0;
                 var textOffY = y;
                 block.paragraphs.forEach(function (paragraph, index) {
                 	if(!!paragraph.algn) {
@@ -404,13 +452,15 @@
                 		var align = 'l'
                 	}
                 	//console.log('[paragraph] algn', paragraph.algn, align);
+                    var para_line_num = 0;
+                    var lineSpec = measureBreakingParagraph(ctx, paragraph);
                 	switch(align) {
                 		case 'r':
-                			var textOffX = shape.x + shape.cx - (!!paragraph.marR?paragraph.marR:0) - block.rIns - measureParagraph(ctx, paragraph, false).w;
+                			var textOffX = shape.x + shape.cx - (!!paragraph.marR?paragraph.marR:0) - block.rIns - lineSpec[para_line_num].w;
                 			//console.log('[r] textOffX', textOffX);
                 		break;
                 		case 'ctr':
-                			var textOffX = shape.x + shape.cx / 2 - measureParagraph(ctx, paragraph, false).w / 2;
+                			var textOffX = shape.x + shape.cx / 2 - lineSpec[para_line_num].w / 2;
                 			//console.log('[ctr] textOffX', textOffX);
                 		break;
                 		default:
@@ -419,8 +469,7 @@
                 		break;
                 	}
                     var buOffX = 0;
-                    var para_line_num = 1;
-                    var lineHeight = measureParagraph(ctx, paragraph, false).h;
+                    var lineHeight = lineSpec[para_line_num].h;
                     if(!!paragraph.runs) {
                         var tl = paragraph.runs.reduce(function(pre, cur) {
                             if(cur.type === 'r' && !!cur.text) {
@@ -431,6 +480,40 @@
                         if(!!paragraph.buFont && !!paragraph.buChar && !!paragraph.buClr && tl > 0) {
                             buOffX = drawText(ctx, textOffX, textOffY, paragraph.buFont, paragraph.buClr, paragraph.defRPr.sz, paragraph.buChar+' ');
                             textOffX += buOffX + paragraph.spcBef;
+                        }
+                        if(!!paragraph.buAutoNum && tl > 0) {
+                        	var runs = paragraph.runs.filter(function(z) {return z.type === 'r' && !!z.text});
+                        	if(runs.length > 0) {
+                        		var run = runs[0];
+                                if('undefined' === typeof run.ea || run.ea === null) run.ea = '+mj-ea';
+                                if('undefined' === typeof run.latin || run.latin === null) run.latin = '+mj-lt';
+                                if('undefined' === typeof run.lang || run.lang === null) run.lang = 'zh-TW';
+                                
+                                if(run.ea !== '+mj-ea' && run.ea !== '+mn-ea') {
+                                    var buFace = run.ea;
+                                } else {
+                                    var tmp = fontmap[run[langmap[run.lang]]];
+                                    if(typeof tmp === 'string') {
+                                        var buFace = tmp;
+                                    } else {
+                                        var buFace = tmp[scriptmap[run.lang]];
+                                    }
+                                }
+
+                                switch(paragraph.buAutoNum) {
+                                	case 'circleNumWdWhitePlain':
+			                        	//buFace = 'Wingdings';
+                                		if(linenum<11) {
+                                			buChar = String.fromCharCode(0x2460 + linenum);
+                                		} else {
+                                			buChar = linenum;
+                                		}
+                                	break;
+                                }
+
+	                            buOffX = drawText(ctx, textOffX, textOffY, buFace, (!!run.solidFill?run.solidFill:'tx1'), !!run.sz?run.sz:1800, buChar + ' ');
+	                            textOffX += buOffX;
+                        	}
                         }
                         paragraph.runs.forEach(function(run, index1) {
                             if(run.type === 'r' && !!run.text) {
@@ -449,25 +532,37 @@
                                     }
                                 }
 
-                                ctx.font = !!run.b?'900 ':'' + !!run.i?'italic ':'' + pt2pixel(run.size, presentationData.cw, canvasData.cw) + 'px ' + face;
+                                //ctx.font = !!run.b?'900 ':'' + !!run.i?'italic ':'' + pt2pixel(run.size, presentationData.cw, canvasData.cw) + 'px ' + face;
                                 for(var i=0; i<run.text.length; i++) {
-	                                if(!block.spAutofit && pixel2emu(ctx.measureText(run.text[i]).width, presentationData.cw, canvasData.cw)+textOffX > cx) {
+	                                /*if(!block.spAutofit && pixel2emu(ctx.measureText(run.text[i]).width, presentationData.cw, canvasData.cw)+textOffX > cx) {
 	                                    textOffY += lineHeight;
 	                                    textOffX = x + paragraph.marL + paragraph.indent + buOffX + paragraph.spcBef;
-	                                }
-                                    textOffX += drawText(ctx, textOffX, textOffY, face, (!!run.solidFill?run.solidFill:'tx1'), !!run.sz?run.sz:1800, run.text[i], run.b, run.i);
+	                                }*/
+                                    textOffX += drawText(ctx, textOffX, textOffY, face, (!!run.solidFill?run.solidFill:'tx2'), !!run.sz?run.sz:1800, run.text[i], run.b, run.i);
                                 }
                             }
                             if(run.type === 'br') {
-                                textOffY += lineHeight;
-                                textOffX = x + paragraph.marL + paragraph.indent + buOffX + paragraph.spcBef;
+                                textOffY += lineSpec[para_line_num].h;
+                                para_line_num++;
+                                switch(align) {
+                                	case 'r':
+                                	textOffX = shape.x + shape.cx - (!!paragraph.marR?paragraph.marR:0) - block.rIns - lineSpec[para_line_num].w;
+                                	break;
+                                	case 'ctr':
+                                	textOffX = shape.x + shape.cx / 2 - lineSpec[para_line_num].w / 2;
+                                	break;
+                                	default:
+	                                textOffX = x + (!!paragraph.marL?paragraph.marL:0) + (!!paragraph.indent?paragraph.indent:0) + buOffX;
+                                	break;
+                                }
                             }
                             if(run.type === 'end') {
                             	//console.log('run end');
                             }
                         });
                     }
-                    textOffY += lineHeight;
+                    textOffY += lineSpec[para_line_num].h;
+                    linenum++;
                 });
 
                 function drawText(ctx, hpos, vpos, font, color, size, str, b, i) {
@@ -505,6 +600,50 @@
         	return tmp;
         }
 
+        function measureBreakingParagraph(ctx, paragraph) {
+        	var ret = {w: 0, h: 0};
+    		var lh = paragraph.runs.reduce(function(pre, cur) {
+    			if(cur.type === 'r' && cur.sz > pre) pre = cur.sz;
+    			return pre;
+    		}, 1800);
+			var lineHeight = Math.round(pixel2emu(pt2pixel(lh, presentationData.cw, canvasData.cw) * 1.05));
+			//console.log('measureBreakingParagraph', emu2pixel(lineHeight));
+			var count = 0;
+    		ret.h = lineHeight;
+    		var tmpwidth = [];
+    		paragraph.runs.forEach(function(run) {
+                if('undefined' === typeof run.ea || run.ea === null) run.ea = '+mj-ea';
+                if('undefined' === typeof run.latin || run.latin === null) run.latin = '+mj-lt';
+                if('undefined' === typeof run.lang || run.lang === null) run.lang = 'zh-TW';
+                
+                if(run.ea !== '+mj-ea' && run.ea !== '+mn-ea') {
+                    var face = run.ea;
+                } else {
+                    var tmp = fontmap[run[langmap[run.lang]]];
+                    if(typeof tmp === 'string') {
+                        var face = tmp;
+                    } else {
+                        var face = tmp[scriptmap[run.lang]];
+                    }
+                }
+    			if(run.type === 'br') {
+    				//ret.h += lineHeight;
+    				tmpwidth.push(ret.w);
+    				ret.w = 0;
+    			}
+    			if(run.type === 'r') {
+    				if(!!run.text && run.text.length > 0) {
+        				ret.w += measureText(ctx, run.text, face, !!run.sz?run.sz:1800, run.b, run.i);
+    				}
+    			}
+    		});
+			tmpwidth.push(ret.w);
+			return tmpwidth.reduce(function(pre, cur) {
+				pre.push({w: cur, h: ret.h});
+				return pre;
+			}, []);
+        }
+
         function measureParagraph(ctx, paragraph, wrap) {
         	var ret = {w: 0, h: 0};
     		var lh = paragraph.runs.reduce(function(pre, cur) {
@@ -515,6 +654,7 @@
         	if(wrap) {
         		var count = 0;
         		ret.h = lineHeight;
+        		var tmpwidth = [];
         		paragraph.runs.forEach(function(run) {
                     if('undefined' === typeof run.ea || run.ea === null) run.ea = '+mj-ea';
                     if('undefined' === typeof run.latin || run.latin === null) run.latin = '+mj-lt';
@@ -532,6 +672,8 @@
                     }
         			if(run.type === 'br') {
         				ret.h += lineHeight;
+        				tmpwidth.push(ret.w);
+        				ret.w = 0;
         			}
         			if(run.type === 'r') {
         				if(!!run.text && run.text.length > 0) {
@@ -539,6 +681,13 @@
         				}
         			}
         		});
+				if(tmpwidth.length > 0) {
+					ret.w = tmpwidth[0];
+					/*ret.w = tmpwidth.reduce(function(pre, cur) {
+						if(cur > pre) pre = cur;
+						return pre;
+					}, 0);*/
+				}
         	} else {
         		ret.h = lineHeight;
         		paragraph.runs.forEach(function(run) {
@@ -830,10 +979,118 @@
         		var pcw = presentationData.cw, ccw = canvasData.cw;
         		var gd = new Guides(ctx, shape.cx, shape.cy, emu2pixel);
 
-        		gd.moveTo(gd.l, gd.t);
+        		if(!!shape.line && !!shape.line.w) {
+        			gd.addFormula('adj', 'val ' + (shape.line.w));
+					gd.addFormula('a1', '*/ adj 3 2');
+					gd.addFormula('a2', '*/ adj 2 3');
+        			if(!!shape.line.headEnd) {
+        				switch(shape.line.headEnd) {
+        					case 'triangle':
+        						if(shape.cx > shape.cy) {
+	        						gd.addFormula('tx1', '+- l a1 0');
+	        						gd.addFormula('ty2', '+- t 0 a2');
+	        						gd.addFormula('ty4', '+- t a2 0');
+        						} else {
+        							gd.addFormula('ty1', '+- t a1 0');
+        							gd.addFormula('tx2', '+- l a2 0');
+        							gd.addFormula('tx4', '+- l 0 a2');
+        						}
+        					break;
+        				}
+        			}
+        			if(!!shape.line.tailEnd) {
+        				switch(shape.line.tailEnd) {
+        					case 'triangle':
+        						if(shape.cx > shape.cy) {
+		    						gd.addFormula('tx6', '+- r 0 a1');
+	        						gd.addFormula('ty7', '+- b a2 0');
+	        						gd.addFormula('ty9', '+- b 0 a2');
+        						} else {
+        							gd.addFormula('ty6', '+- b 0 a1');
+        							gd.addFormula('tx7', '+- r a2 0');
+        							gd.addFormula('tx9', '+- r 0 a2');
+        						}
+        					break;
+        				}
+        			}
+        		}
+        		//tailEnd: x1 = l + 2w, y1 = t
+        		//tailEnd: x2 = x1, y2 = t - w
+        		//tailEnd: x3 = l, y3 = t
+        		//tialEnd: x4 = x1, y4 = t + w
+        		//tailEnd: x5 = x1, y5 = t
+
+        		//headEnd: x6 = r - 2w, y6 = b
+        		//headEnd: x7 = x6, y7 = b - w
+        		//headEnd: x8 = r, y8 = b
+        		//headEnd: x9 = x6, y9 = b + w
+        		//headEnd: x10 = x6, y10 = b
+
+        		if(!!shape.line && !!shape.line.w && !!shape.line.headEnd) {
+        			switch(shape.line.headEnd) {
+        				case 'triangle':
+        					if(shape.cx > shape.cy) {
+	        					gd.moveTo(gd.tx1, gd.t);
+        					} else {
+        						gd.moveTo(gd.l, gd.ty1);
+        					}
+        				break;
+        			}
+        		} else {
+	        		gd.moveTo(gd.l, gd.t);
+        		}
         		gd.begin();
-        		gd.lineTo(gd.r, gd.b);
-        		gd.lineTo(gd.l, gd.t);
+        		if(!!shape.line && !!shape.line.w && !!shape.line.headEnd) {
+        			switch(shape.line.headEnd) {
+        				case 'triangle':
+        					if(shape.cx > shape.cy) {
+	        					gd.lineTo(gd.tx1, gd.ty2);
+	        					gd.lineTo(gd.l, gd.t);
+	        					gd.lineTo(gd.tx1, gd.ty4);
+	        					gd.lineTo(gd.tx1, gd.t);
+        					} else {
+        						gd.lineTo(gd.tx2, gd.ty1);
+        						gd.lineTo(gd.l, gd.t);
+        						gd.lineTo(gd.tx4, gd.ty1);
+        						gd.lineTo(gd.l, gd.ty1);
+        					}
+        				break;
+        			}
+        		}
+        		if(!!shape.line && !!shape.line.w && !!shape.line.tailEnd) {
+        			switch(shape.line.tailEnd) {
+        				case 'triangle':
+        					if(shape.cx > shape.cy) {
+			        			gd.lineTo(gd.tx6, gd.b);
+			        			gd.lineTo(gd.tx6, gd.ty7);
+			        			gd.lineTo(gd.r, gd.b);
+			        			gd.lineTo(gd.tx6, gd.ty9);
+			        			gd.lineTo(gd.tx6, gd.b);
+        					} else {
+        						gd.lineTo(gd.r, gd.ty6);
+        						gd.lineTo(gd.tx7, gd.ty6);
+        						gd.lineTo(gd.r, gd.b);
+        						gd.lineTo(gd.tx9, gd.ty6);
+        						gd.lineTo(gd.r, gd.ty6);
+        					}
+        				break;
+        			}
+        		} else {
+	        		gd.lineTo(gd.r, gd.b);
+        		}
+        		if(!!shape.line && !!shape.line.w && !!shape.line.headEnd) {
+        			switch(shape.line.headEnd) {
+        				case 'triangle':
+        					if(shape.cx > shape.cy) {
+			        			gd.lineTo(gd.tx1, gd.t);
+        					} else {
+        						gd.lineTo(gd.l, gd.ty1);
+        					}
+        				break;
+        			}
+        		} else {
+	        		gd.lineTo(gd.l, gd.t);
+        		}
         		gd.close();
     		},
     		'notchedRightArrow': function(ctx, shape) {
