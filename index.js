@@ -35,7 +35,11 @@ zip.on('ready', () => {
 					attrValueProcessors: [function(name) {
 						//no direct float value in ECMA-376 attribute
 						if(name.search(/^-*[0-9]+$/) === 0) {
-							return parseInt(name, 10);
+							if(name.length > 1 && name.indexOf('0') === 0) {
+								return name;
+							} else {
+								return parseInt(name, 10);
+							}
 						} else {
 							return name;
 						}
