@@ -233,7 +233,7 @@
         function drawShape(slide, idx, ctx) {
             var canvasw = canvasData.cw;
             var shape = slide.commonSlideData.shapes[idx];
-            /*if(!!shape.textBody && shape.textBody.spAutofit) {
+            /*if(!!shape.textBody && shape.textBody.spAutoFit) {
             	var dim = measureTextBlock(ctx, shape.textBody, false);
             	shape.cx = shape.cx>dim.w?shape.cx:dim.w;
             	shape.cy = shape.cy>dim.h?shape.cy:dim.h;
@@ -414,7 +414,7 @@
                 	y = Math.round(shape.y + block.tIns + lineHeight1);
                 }
 
-                if(!!shape.textBody && shape.textBody.spAutofit) {
+                if(!!shape.textBody && shape.textBody.spAutoFit) {
                 	//y += lineHeight;
                 }
 
@@ -449,7 +449,12 @@
                 	if(!!paragraph.algn) {
                 		var align = paragraph.algn;
                 	} else {
-                		var align = 'l'
+                		align = 'l';
+	                    /*if(!!block.spAutoFit && shape.txBox) {
+	                    	align = 'ctr';
+	                    } else {
+	                    	align = 'l';
+	                    }*/
                 	}
                 	//console.log('[paragraph] algn', paragraph.algn, align);
                     var para_line_num = 0;
