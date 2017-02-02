@@ -32,6 +32,8 @@ zip.on('ready', () => {
 					explicitArray: false, 
 					explicitChildren: true,
 					trim: false,
+					normalize: false,
+				    allowSpacesInTextNode: true,
 					attrValueProcessors: [function(name) {
 						//no direct float value in ECMA-376 attribute
 						if(name.search(/^-*[0-9]+$/) === 0) {
