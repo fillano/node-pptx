@@ -51,7 +51,6 @@ zip.on('ready', () => {
 					console.log('parsing ' + cur);
 					if(!!err) return reject(err);
 					resolve({file: cur, data: strip(data)});
-					//resolve({file: cur, data: data});
 				});
 			});
 			pre.push(p);

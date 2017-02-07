@@ -231,13 +231,7 @@
         }
 
         function drawShape(slide, idx, ctx) {
-            var canvasw = canvasData.cw;
             var shape = slide.commonSlideData.shapes[idx];
-            /*if(!!shape.textBody && shape.textBody.spAutoFit) {
-            	var dim = measureTextBlock(ctx, shape.textBody, false);
-            	shape.cx = shape.cx>dim.w?shape.cx:dim.w;
-            	shape.cy = shape.cy>dim.h?shape.cy:dim.h;
-            }*/
 
             {
     			var orix = shape.x, oriy = shape.y;
@@ -372,7 +366,8 @@
         		shape.x = orix;
         		shape.y = oriy;
             }
-
+            
+            //if shape outline is needed for debug
             /*ctx.strokeStyle = '#7799BB';
 			ctx.strokeRect(
 				emu2pixel(shape.x),
@@ -409,13 +404,8 @@
                         	y = Math.round(shape.y + block.tIns + lineHeight1);
                         	break;
                     }
-                    //console.log('anchorCtr: ', block.anchorCtr)
                 } else {
                 	y = Math.round(shape.y + block.tIns + lineHeight1);
-                }
-
-                if(!!shape.textBody && shape.textBody.spAutoFit) {
-                	//y += lineHeight;
                 }
 
                 var txt = '';
@@ -431,18 +421,6 @@
                 	})
                 }
 
-                /*console.log(
-                	'[shape and text pos] (preset,shape.x,shape.y,x,y,lineHeight1,txt,anchor)', 
-                	shape.preset,
-                	emu2pixel(shape.x), 
-                	emu2pixel(shape.y), 
-                	emu2pixel(x), 
-                	emu2pixel(y), 
-                	emu2pixel(lineHeight1),
-                	txt,
-                	block.anchor
-            	);*/
-
                 var linenum = 0;
                 var textOffY = y;
                 block.paragraphs.forEach(function (paragraph, index) {
@@ -450,31 +428,21 @@
                 		var align = paragraph.algn;
                 	} else {
                 		align = 'l';
-	                    /*if(!!block.spAutoFit && shape.txBox) {
-	                    	align = 'ctr';
-	                    } else {
-	                    	align = 'l';
-	                    }*/
                 	}
-                	//console.log('[paragraph] algn', paragraph.algn, align);
                     var para_line_num = 0;
                     var lineSpec = measureBreakingParagraph(ctx, paragraph);
                 	switch(align) {
                 		case 'r':
                 			var textOffX = shape.x + shape.cx - (!!paragraph.marR?paragraph.marR:0) - block.rIns - lineSpec[para_line_num].w;
-                			//console.log('[r] textOffX', textOffX);
                 		break;
                 		case 'ctr':
                 			var textOffX = shape.x + shape.cx / 2 - lineSpec[para_line_num].w / 2;
-                			//console.log('[ctr] textOffX', textOffX);
                 		break;
                 		default:
 		                    var textOffX = x + (!!paragraph.marL?paragraph.marL:0) + (!!paragraph.indent?paragraph.indent:0);
-                			//console.log('[l] textOffX', textOffX);
                 		break;
                 	}
                     var buOffX = 0;
-                    var lineHeight = lineSpec[para_line_num].h;
                     if(!!paragraph.runs) {
                         var tl = paragraph.runs.reduce(function(pre, cur) {
                             if(cur.type === 'r' && !!cur.text) {
@@ -507,7 +475,6 @@
 
                                 switch(paragraph.buAutoNum) {
                                 	case 'circleNumWdWhitePlain':
-			                        	//buFace = 'Wingdings';
                                 		if(linenum<11) {
                                 			buChar = String.fromCharCode(0x2460 + linenum);
                                 		} else {
@@ -520,7 +487,7 @@
 	                            textOffX += buOffX;
                         	}
                         }
-                        paragraph.runs.forEach(function(run, index1) {
+                        paragraph.runs.forEach(function(run) {
                             if(run.type === 'r' && !!run.text) {
                                 if('undefined' === typeof run.ea || run.ea === null) run.ea = '+mj-ea';
                                 if('undefined' === typeof run.latin || run.latin === null) run.latin = '+mj-lt';
@@ -537,12 +504,7 @@
                                     }
                                 }
 
-                                //ctx.font = !!run.b?'900 ':'' + !!run.i?'italic ':'' + pt2pixel(run.size, presentationData.cw, canvasData.cw) + 'px ' + face;
                                 for(var i=0; i<run.text.length; i++) {
-	                                /*if(!block.spAutofit && pixel2emu(ctx.measureText(run.text[i]).width, presentationData.cw, canvasData.cw)+textOffX > cx) {
-	                                    textOffY += lineHeight;
-	                                    textOffX = x + paragraph.marL + paragraph.indent + buOffX + paragraph.spcBef;
-	                                }*/
                                     textOffX += drawText(ctx, textOffX, textOffY, face, (!!run.solidFill?run.solidFill:'tx2'), !!run.sz?run.sz:1800, run.text[i], run.b, run.i);
                                 }
                             }
@@ -612,8 +574,6 @@
     			return pre;
     		}, 1800);
 			var lineHeight = Math.round(pixel2emu(pt2pixel(lh, presentationData.cw, canvasData.cw) * 1.05));
-			//console.log('measureBreakingParagraph', emu2pixel(lineHeight));
-			var count = 0;
     		ret.h = lineHeight;
     		var tmpwidth = [];
     		paragraph.runs.forEach(function(run) {
@@ -632,7 +592,6 @@
                     }
                 }
     			if(run.type === 'br') {
-    				//ret.h += lineHeight;
     				tmpwidth.push(ret.w);
     				ret.w = 0;
     			}
@@ -657,7 +616,6 @@
     		}, 1800);
     		var lineHeight = Math.round(pixel2emu(pt2pixel(lh, presentationData.cw, canvasData.cw) * 1.05, presentationData.cw, canvasData.cw));
         	if(wrap) {
-        		var count = 0;
         		ret.h = lineHeight;
         		var tmpwidth = [];
         		paragraph.runs.forEach(function(run) {
@@ -688,10 +646,6 @@
         		});
 				if(tmpwidth.length > 0) {
 					ret.w = tmpwidth[0];
-					/*ret.w = tmpwidth.reduce(function(pre, cur) {
-						if(cur > pre) pre = cur;
-						return pre;
-					}, 0);*/
 				}
         	} else {
         		ret.h = lineHeight;
@@ -734,7 +688,6 @@
         }
 
         function drawPic(slide, idx, ctx) {
-            var canvasw = canvasData.canvas.width;
             var pic = slide.commonSlideData.shapes[idx];
             var img = media[pic.blip.embed];
         	if(typeof pic.blip.srcRect === 'undefined') pic.blip.srcRect = {l:0, r:0, t:0, b:0};
@@ -827,19 +780,16 @@
 
         function pt2pixel(sz) {
         	var screenw = presentationData.cw, canvasw = canvasData.cw;
-            //return Math.round(sz * 914400 * canvasw / 100 / 72 / screenw);
             return sz * 914400 * canvasw / 100 / 72 / screenw;
         }
 
         function emu2pixel(l) {
         	var screenw = presentationData.cw, canvasw = canvasData.cw;
-            //return Math.round(l * canvasw / screenw);
             return l * canvasw / screenw;
         }
 
         function pixel2emu(l) {
         	var screenw = presentationData.cw, canvasw = canvasData.cw;
-            //return Math.round(l * screenw / canvasw);
             return l * screenw / canvasw;
         }
 
@@ -925,8 +875,6 @@
         	'cust': function(ctx, shape) {
         		shape.presetGeom.pathList.forEach(function(path) {
 	        		var gd = new Guides(ctx, shape.cx, shape.cy, function(x){return emu2pixel(x) * (shape.cx>shape.cy?shape.cy:shape.cx) / (shape.cx>shape.cy?path.h:path.w)});
-        			//gd.w = path.w;
-        			//gd.h = path.h;
 	        		gd.begin();
 	        		path.actions.forEach(function(action) {
 	        			if(!!gd[action.name] && typeof gd[action.name] === 'function') {
@@ -981,7 +929,6 @@
         		gd.close();
     		},
     		'line': function(ctx, shape) {
-        		var pcw = presentationData.cw, ccw = canvasData.cw;
         		var gd = new Guides(ctx, shape.cx, shape.cy, emu2pixel);
 
         		if(!!shape.line && !!shape.line.w) {
@@ -1019,18 +966,6 @@
         				}
         			}
         		}
-        		//tailEnd: x1 = l + 2w, y1 = t
-        		//tailEnd: x2 = x1, y2 = t - w
-        		//tailEnd: x3 = l, y3 = t
-        		//tialEnd: x4 = x1, y4 = t + w
-        		//tailEnd: x5 = x1, y5 = t
-
-        		//headEnd: x6 = r - 2w, y6 = b
-        		//headEnd: x7 = x6, y7 = b - w
-        		//headEnd: x8 = r, y8 = b
-        		//headEnd: x9 = x6, y9 = b + w
-        		//headEnd: x10 = x6, y10 = b
-
         		if(!!shape.line && !!shape.line.w && !!shape.line.headEnd) {
         			switch(shape.line.headEnd) {
         				case 'triangle':
@@ -1102,7 +1037,7 @@
         		var gd = new Guides(ctx, shape.cx, shape.cy, emu2pixel);
         		shape.presetGeom.avList.forEach(function(a) {
         			gd.addFormula(a.name, a.fmla);
-        		})
+        		});
 
         		gd.addFormula('maxAdj2', '*/ 100000 w ss');
         		gd.addFormula('a1', 'pin 0 adj1 100000');
@@ -1177,7 +1112,6 @@
         		gd.close();
     		},
     		'ellipse': function(ctx, shape) {
-        		var pcw = presentationData.cw, ccw = canvasData.cw;
         		var gd = new Guides(ctx, shape.cx, shape.cy, emu2pixel);
 
         		gd.addFormula('idx', 'cos wd2 2700000');
@@ -1250,22 +1184,22 @@
         	this.lineTo = function(x, y) {
         		ctx.lineTo(this.conv(x), this.conv(y));
         		cur.x = x, cur.y = y;
-        	}
+        	};
 
         	this.lnTo = this.lineTo;
 
         	this.moveTo = function(x, y) {
         		ctx.moveTo(this.conv(x), this.conv(y));
         		cur.x = x, cur.y = y;
-        	}
+        	};
 
         	this.begin = function() {
         		ctx.beginPath();
-        	}
+        	};
 
         	this.close = function() {
         		ctx.closePath();
-        	}
+        	};
 
         	this.arcTo = function(hr, vr, sta, swa) {
         		if(swa < 0) {
@@ -1284,12 +1218,12 @@
         		ctx.ellipse(this.conv(ecx), this.conv(ecy), this.conv(hr), this.conv(vr), 0, sta * 2 * Math.PI / 21600000, end * 2 * Math.PI / 21600000, anticlock);
     			cur.x = ecx + hr * Math.cos(end * 2 * Math.PI / 21600000);
     			cur.y = ecy + vr * Math.sin(end * 2 * Math.PI / 21600000);
-        	}
+        	};
 
         	this.cubicBezTo = function(x1, y1, x2, y2, x, y) {
         		ctx.bezierCurveTo(this.conv(x1), this.conv(y1), this.conv(x2), this.conv(y2), this.conv(x), this.conv(y));
         		cur.x = x, cur.y = y;
-        	}
+        	};
 
         	function parse(name, fmla) {
         		var key = fmla.split(/[ ]+/)[0];
