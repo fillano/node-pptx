@@ -79,7 +79,13 @@ zip.on('ready', () => {
 					let ws = fs.createWriteStream(argv._[1] + path.sep + 'index.html', {defaultEncoding:'utf-8'});
 					ws.on('finish', () => {
 						console.log('writing ' + argv._[1] + path.sep + 'index.html');
-						resolve(objs);
+						let rs = fs.createReadStream(__dirname + path.sep + 'drawshapes.js', {encoding:'utf-8'});
+						let ws = fs.createWriteStream(argv._[1] + path.sep + 'drawshapes.js', {defaultEncoding:'utf-8'});
+						ws.on('finish', () => {
+							console.log('writing ' + argv._[1] + path.sep + 'drawshapes.js');
+							resolve(objs);
+						});
+						rs.pipe(ws);
 					});
 					rs.pipe(ws);
 				});
