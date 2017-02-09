@@ -42,6 +42,9 @@
         var slideList = [];
 
         var currentSlide = 0;
+        var currentStep = 0;
+        var steps = [];
+        var builds = [];
 
         var media = {};
 
@@ -148,55 +151,102 @@
                 "+mj-ea": data.themes[themeTarget].fontScheme.majorFont.fonts,
                 "+mn-lt": data.themes[themeTarget].fontScheme.minorFont.latin,
                 "+mn-ea": data.themes[themeTarget].fontScheme.minorFont.fonts
-             };
-             media = {};
+            };
+            media = {};
 
-             wait(data.slides[slideList[idx].rid].commonSlideData.shapes.reduce(function(pre, cur) {
-             	if(cur.type === 'pic') pre.push(cur.blip.embed);
-             	return pre;
-             }, []).reduce(function(pre, cur) {
-             	pre.push(preload(cur));
-             	return pre;
-             }, []), function() {
-	            drawSlide(data, slideList[idx].rid, $('#canvas')[0]);
-             });
-             function preload(url) {
-             	return function(done) {
-					var img = new Image();
-					img.src = url;
-					img.onload = function () {
-						media[url] = img;
-						done();
-					};
-             	}
-             }
+            wait(data.slides[slideList[idx].rid].commonSlideData.shapes.reduce(function(pre, cur) {
+                if(cur.type === 'pic') pre.push(cur.blip.embed);
+                return pre;
+            }, []).reduce(function(pre, cur) {
+                pre.push(preload(cur));
+                return pre;
+            }, []), function() {
+                var slide = Object.assign({}, data.slides[slideList[idx].rid]);
+                steps = [];
+                builds = [];
+                timingInit(slide);
+                drawSlide(slide, $('#canvas')[0]);
+            });
+            function preload(url) {
+                return function(done) {
+                    var img = new Image();
+                    img.src = url;
+                    img.onload = function () {
+                        media[url] = img;
+                        done();
+                    };
+                }
+            }
         }
 
-        function timingInit(data, idx) {
-            /*var timing = data.slideList[data.slideIdList[idx].rid].timing;
-             var steps = steBuilder(timing);
-             steps.reduce(function(pre, cur) {
-             var step = {};
-             var start = '';
-             }, []);*/
+        function timingInit(slide) {
+            var timing = slide.timing;
+            steps = stepBuilder(timing);
+            if(!!timing.bldLst) {
+                builds = timing.bldLst;
+            }
+            steps.forEach(function(step) {
+                stepWalker(step, slide.commonSlideData.shapes, function(shape) {
+                    if(!!shape.style) {
+                        shape.style.visibility = 'invisible';
+                    } else {
+                        shape.style = {visibility: 'invisible'};
+                    }
+                });
+            });
+            builds.forEach(function(bld) {
+                slide.commonSlideData.shapes.forEach(function(shape) {
+                    if(parseInt(shape.id, 10) === parseInt(bld.spid, 10)) {
+                        if(!!shape.style) {
+                            shape.style.visibility = 'invisible';
+                        } else {
+                            shape.style = {visibility: 'invisible'};
+                        }
+                    }
+                });
+            });
+        }
+
+        function stepWalker(step, shapes, cb) {
+            if(step.name === 'p:set') {
+                if(!!step.attrNameLst && step.attrNameLst.length > 0) {
+                    var e = step.attrNameLst.filter(function(x) {return x.val === 'style.visibility' && x.name === 'p:attrName'});
+                    if(e.length > 0) {
+                        var target = step.tgtEl;
+                        shapes.forEach(function(shape) {
+                            if(parseInt(shape.id, 10) === parseInt(target, 10)) {
+                                cb(shape);
+                            }
+                        });
+                    }
+                }
+            }
+            if(!!step.childTnLst) {
+                step.childTnLst.forEach(function(next) {
+                   stepWalker(next, shapes, cb);
+                });
+            }
         }
 
         function stepBuilder(timing) {
-            /*var root = timing.timeNodeList.parallel;
-             var seq = root.childTimeNodeList.sequence.parallel;
-             var steps = seq.reduce(function(pre, cur) {
-             var start = cur;
-             while(start.startConditionList.filter(function(cond) {if(cond.delay === 'indefinite') {return false} else {return true}}).length === 0) {
-             start = start.childTimeNodeList.parallel[0];
-             }
-             pre.push(start);
-             return pre;
-             }, []);
-             return steps;*/
+            var ret = [];
+            timing.tnLst.forEach(function(tn) {
+                if(tn.nodeType === 'tmRoot' && !!tn.childTnLst) {
+                    tn.childTnLst.forEach(function(tn) {
+                        if(tn.nodeType === 'mainSeq' && !!tn.childTnLst) {
+                           tn.childTnLst.forEach(function(tn) {
+                               if(tn.nodeType === 'clickPar') {
+                                   ret.push(tn);
+                               }
+                           });
+                        }
+                    });
+                }
+            });
+            return ret;
         }
 
-        function drawSlide(data, idx, canvas) {
-            var slide = data.slides[idx];
+        function drawSlide(slide, canvas) {
             if (!!slide.transition) {
                 var mask = $('#mask')[0];
                 var next = $('#next')[0];
@@ -233,7 +283,10 @@
 
         function drawShape(slide, idx, ctx) {
             var shape = slide.commonSlideData.shapes[idx];
-
+            console.log(shape.id, shape.style, shape.preset);
+            if(!!shape.style && !!shape.style.visibility && shape.style.visibility === 'invisible') {
+                return;
+            }
             {
     			var orix = shape.x, oriy = shape.y;
     			ctx.translate(emu2pixel(orix), emu2pixel(oriy));
