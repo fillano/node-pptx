@@ -3,48 +3,87 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+    <!--<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/5.0.0/normalize.min.css" type="text/css" />-->
     <style>
-        canvas {
+        .layout {
+            display: block;
+            margin: 0 0 0 0;
+            padding: 0 0 0 0;
+            text-align: center;
+        }
+        #canvas {
+            display:inline-block;
             background-color: white;
+            position: relative;
         }
-
-        .mask_canvas {
+        #buffer {
+            display: none;
             position: absolute;
-            top: -50000px;
-            left: -50000px;
+            left: -150000px;
+            top: -150000px;
         }
-
-        .next_canvas {
+        #panel {
+            display: block;
+            position: relative;
+            padding: 0 0 0 0;
+            margin: 0 0 0 0;
+            text-align: center;
+        }
+        #controls {
+            display: block;
             position: absolute;
-            top: -100000px;
+            width: 100%;
+            text-align: center;
+        }
+        .steps_canvas {
+            display: none;
+            position: absolute;
             left: -100000px;
+            top: -100000px;
+            /*background-color: rgba(0, 0, 0, 0);*/
+        }
+
+        .steps_canvas_hidden {
+            display: none;
+            position: absolute;
+            left: -100000px;
+            top: -100000px;
+            /*background-color: rgba(0, 0, 0, 0);*/
         }
     </style>
 </head>
 <body style="background-color: #000;text-align: center;padding:0 0 0 0; margin: 0 0 0 0">
-<canvas id="canvas" width="800" height="600"></canvas>
-<canvas id="mask" class="mask_canvas" width="800" height="600"></canvas>
-<canvas id="next" class="next_canvas" width="800" height="600"></canvas>
-<br>
-<button id="step1">上一步</button>
-<button id="step2">下一步</button>
+<div class="layout">
+    <div id="panel"><canvas id="canvas" width="800" height="600"></canvas><canvas id="buffer" width="800" height="600"></canvas></div>
+</div>
+<div id="controls">
+    <button id="step1">上一步</button>
+    <button id="step2">下一步</button>
+    <button id="fullscreen">全螢幕</button>
+</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
 <script src="drawshapes.js"></script>
 <script src="main.js"></script>
 <script>
     $(function () {
         var canvas = $('#canvas')[0];
+        var buffer = $('#buffer')[0];
+        var stepsCanvas = [];
 
         var presentationData = {};
 
         var canvasData = {};
 
         var slideList = [];
+        var anim_lock = false;
 
         var currentSlide = 0;
         var currentStep = 0;
         var steps = [];
+        var stepsCache = [];
         var builds = [];
+        var stepsCanvasCache = [];
+        var slide = {};
 
         var media = {};
 
@@ -60,34 +99,123 @@
             "zh-CN": 'Hans'
         };
         var fontmap = {};
+        var touchX1 = 0;
+        var touchX2 = 0;
 
         presentationInit(data);
 
         $('#step1').click(function() {
-            if(currentSlide > 0) {
-                currentSlide--;
-                slideInit(data, currentSlide);
-            }
+            goPrev();
         });
         $('#step2').click(function() {
-            if(currentSlide < slideList.length-1) {
-                currentSlide++;
+            goNext();
+        });
+        document.body.addEventListener('touchstart', function(e) {
+            touchX1 = e.pageX;
+        }, false);
+        document.body.addEventListener('touchend', function(e) {
+            touchX2 = e.pageX;
+            if(touchX2>touchX1 && touchX2-touchX1 > 20) {
+                goNext();
+            }
+            if(touchX1>touchX2 && touchX1-touchX2 > 20) {
+                goPrev();
+            }
+        }, false);
+        window.addEventListener('resize', function(e) {
+            presentationInit(data);
+        });
+
+        function goNext() {
+            if(!anim_lock) {
+                if(currentStep < steps.length) {
+                    currentStep++;
+                    stepExecuter(steps[currentStep-1]);
+                } else {
+                    if(currentSlide < slideList.length-1) {
+                        if(stepsCache.length <= currentSlide + 1) {
+                            stepsCache[currentSlide] = steps;
+                            stepsCanvasCache[currentSlide] = stepsCanvas;
+                        }
+                        setTimeout(function() {
+                            data.slides[slideList[currentSlide-1].rid].commonSlideData.shapes.forEach(function(shape) {
+                                document.getElementById('panel').removeChild(shape.canvas);
+                                shape.canvas = null;
+                            });
+                        }, 0);
+                        currentSlide++;
+                        slide = data.slides[slideList[currentSlide].rid];
+                        currentStep = 0;
+                        stepsCanvas = [];
+                        slideInit(data, currentSlide);
+                    }
+                }
+            }
+        }
+
+        function goPrev() {
+            if(!anim_lock) {
+                if(currentStep === 0) {
+                    currentSlide--;
+                    setTimeout(function() {
+                        data.slides[slideList[currentSlide+1].rid].commonSlideData.shapes.forEach(function(shape) {
+                            document.getElementById('panel').removeChild(shape.canvas);
+                            shape.canvas = null;
+                        });
+                    }, 0);
+                }
+                currentStep = 0;
+                slide = data.slides[slideList[currentSlide].rid];
                 slideInit(data, currentSlide);
             }
+            /*if(!anim_lock) {
+                if(currentStep > 0) {
+                    currentStep--;
+                    canvas.getContext('2d').putImageData(stepsCanvas[currentStep], 0, 0);
+                } else {
+                    if(currentSlide > 0) {
+                        currentSlide--;
+                        slide = data.slides[slideList[currentSlide].rid];
+                        stepsCanvas = stepsCanvasCache[currentSlide];
+                        steps = stepsCache[currentSlide];
+                        currentStep = stepsCanvas.length>0?stepsCanvas.length-1:0;
+                        canvas.getContext('2d').putImageData(stepsCanvas[currentStep], 0, 0);
+                    }
+                }
+            }*/
+        }
+
+        function hideCanvas() {
+            stepsCanvas[currentStep].className = 'steps_canvas_hide';
+        }
+
+        $('#fullscreen').click(function() {
+            (function() {
+                if(!!document.body.webkitRequestFullscreen) {
+                    document.body.webkitRequestFullscreen();
+                    return;
+                }
+                if(!!document.body.mozRequestFullScreen) {
+                    document.body.mozRequestFullScreen();
+                    return;
+                }
+                if(!!document.body.msRequestFullscreen) {
+                    document.body.msRequestFullscreen();
+                    return;
+                }
+                if(!!document.body.requestFullscreen) {
+                    document.body.requestFullscreen();
+                }
+            })();
+            slideInit(data, currentSlide);
         });
 
         $(document).on('keyup', function(e) {
             if(e.keyCode === 39 || e.keyCode === 32) {
-                if(currentSlide < slideList.length-1) {
-                    currentSlide++;
-                    slideInit(data, currentSlide);
-                }
+                goNext();
             }
             if(e.keyCode === 37) {
-                if(currentSlide > 0) {
-                    currentSlide--;
-                    slideInit(data, currentSlide);
-                }
+                goPrev();
             }
         });
 
@@ -95,33 +223,13 @@
             var vzw = document.documentElement.clientWidth;
             var vzh = document.documentElement.clientHeight;
             var _canvasd = calculateCanvasWidth(vzw, vzh);
-            var canvas = $('#canvas')[0];
-            var mask = $('#mask')[0];
-            var next = $('#next')[0];
-
             canvasData.cw = _canvasd.w;
             canvasData.ch = _canvasd.h;
-            canvasData.canvas = {
-                width: _canvasd.w,
-                height: _canvasd.h
-            };
-
             canvas.width = _canvasd.w;
             canvas.height = _canvasd.h;
-
-            canvasData.mask = {
-                width: _canvasd.w,
-                height: _canvasd.h
-            };
-            mask.width = _canvasd.w;
-            mask.height = _canvasd.h;
-
-            canvasData.next = {
-                width: _canvasd.w,
-                height: _canvasd.h
-            }
-            next.width = _canvasd.w;
-            next.height = _canvasd.h;
+            buffer.width = _canvasd.w;
+            buffer.height = _canvasd.h;
+            document.getElementById('controls').style.top = vzh - 20 + 'px';
         }
 
         function presentationInit(data) {
@@ -133,7 +241,7 @@
                 pre.push({rid:cur.rid, target:cur.target});
                 return pre;
             }, []);
-            slideInit(data, 0);
+            slideInit(data, currentSlide);
         }
 
         function slideInit(data, idx) {
@@ -154,18 +262,37 @@
             };
             media = {};
 
-            wait(data.slides[slideList[idx].rid].commonSlideData.shapes.reduce(function(pre, cur) {
+            slide = data.slides[slideList[idx].rid];
+            wait(slide.commonSlideData.shapes.reduce(function(pre, cur, index) {
+                if(!cur.canvas) {
+                    cur.canvas = createCanvas(index === 0);
+                    cur.shapeIndex = index;
+                    cur.resize = false;
+                } else {
+                    if(cur.canvas.width !== canvasData.cw) {
+                        document.getElementById('panel').removeChild(cur.canvas);
+                        cur.canvas = createCanvas(index === 0);
+                        cur.resize = true;
+                    } else {
+                        if(!!cur.orig) {
+                            Object.keys(cur.orig).forEach(function(k) {
+                                cur[k] = cur.orig[k];
+                            });
+                        }
+                        clearCanvas(cur.canvas);
+                        cur.resize = false;
+                    }
+                }
                 if(cur.type === 'pic') pre.push(cur.blip.embed);
                 return pre;
             }, []).reduce(function(pre, cur) {
                 pre.push(preload(cur));
                 return pre;
             }, []), function() {
-                var slide = Object.assign({}, data.slides[slideList[idx].rid]);
                 steps = [];
                 builds = [];
                 timingInit(slide);
-                drawSlide(slide, $('#canvas')[0]);
+                drawSlide(slide);
             });
             function preload(url) {
                 return function(done) {
@@ -185,12 +312,16 @@
             if(!!timing.bldLst) {
                 builds = timing.bldLst;
             }
+            stepsCanvas = [];
             steps.forEach(function(step) {
                 stepWalker(step, slide.commonSlideData.shapes, function(shape) {
-                    if(!!shape.style) {
-                        shape.style.visibility = 'invisible';
-                    } else {
-                        shape.style = {visibility: 'invisible'};
+                    stepsCanvas.push(shape.id);
+                    if(!shape.resize) {
+                        if(!!shape.style) {
+                            shape.style.visibility = 'invisible';
+                        } else {
+                            shape.style = {visibility: 'invisible'};
+                        }
                     }
                 });
             });
@@ -198,9 +329,9 @@
                 slide.commonSlideData.shapes.forEach(function(shape) {
                     if(parseInt(shape.id, 10) === parseInt(bld.spid, 10)) {
                         if(!!shape.style) {
-                            shape.style.visibility = 'invisible';
+                            //shape.style.visibility = 'invisible';
                         } else {
-                            shape.style = {visibility: 'invisible'};
+                            //shape.style = {visibility: 'invisible'};
                         }
                     }
                 });
@@ -246,44 +377,25 @@
             return ret;
         }
 
-        function drawSlide(slide, canvas) {
-            if (!!slide.transition) {
-                var mask = $('#mask')[0];
-                var next = $('#next')[0];
-                var ctx_canvas = canvas.getContext('2d');
-                var ctx_mask = mask.getContext('2d');
-                var ctx_next = next.getContext('2d');
-                ctx_next.fillStyle = slide.colorScheme[slide.colorMap[slide.commonSlideData.background]];
-                ctx_next.fillRect(0, 0, next.width, next.height);
-                ctx_mask.fillStyle = slide.colorScheme[slide.colorMap[slide.commonSlideData.background]];
-                ctx_mask.fillRect(0, 0, mask.width, mask.height);
-                slide.shapes.forEach(function (shape, idx) {
-                    if (shape.type === 'shape') {
-                        drawShape(slide, idx, ctx_next);
-                    }
-                    if (shape.type === 'pic') {
-                        drawPic(slide, idx, ctx_next);
-                    }
-                });
-                drawTransition(slide.transition, ctx_canvas, ctx_next, ctx_mask);
-            } else {
-                var ctx = canvas.getContext('2d');
-                ctx.fillStyle = slide.colorScheme[slide.colorMap[slide.commonSlideData.background]];
-                ctx.fillRect(0, 0, canvasData.cw, canvasData.ch);
-                slide.commonSlideData.shapes.forEach(function (shape, idx) {
-                    if (shape.type === 'shape') {
-                        drawShape(slide, idx, ctx);
-                    }
-                    if (shape.type === 'pic') {
-                        drawPic(slide, idx, ctx);
-                    }
-                });
-            }
+        function drawSlide(slide) {
+            slide.commonSlideData.shapes.forEach(function (shape) {
+                if (shape.type === 'shape') {
+                    drawShape(shape);
+                }
+                if (shape.type === 'pic') {
+                    drawPic(shape);
+                }
+            });
+            render(slide, canvas);
         }
 
-        function drawShape(slide, idx, ctx) {
-            var shape = slide.commonSlideData.shapes[idx];
-            console.log(shape.id, shape.style, shape.preset);
+        function drawShape(shape) {
+            //var shape = slide.commonSlideData.shapes[idx];
+            var ctx = shape.canvas.getContext('2d');
+            if(shape.shapeIndex === 0) {
+                ctx.fillStyle = slide.colorScheme[slide.colorMap[slide.commonSlideData.background]];
+                ctx.fillRect(0, 0, canvasData.cw, canvasData.ch);
+            }
             if(!!shape.style && !!shape.style.visibility && shape.style.visibility === 'invisible') {
                 return;
             }
@@ -393,7 +505,7 @@
 	            			pat = [1,1];
 	            			break;
 	            			default:
-	            			throw 'presetDash pattern not supported.';
+	            			throw new Error('presetDash pattern not supported.');
 	            			break;
 	            		}
 	            		pat.forEach(function(s) {
@@ -433,6 +545,8 @@
             if (!!shape.textBody && !!shape.textBody.paragraphs && Array.isArray(shape.textBody.paragraphs) && shape.textBody.paragraphs.length > 0) {
                 drawTextblock(shape.textBody);
             }
+
+            //shape.canvas.className = 'steps_canvas';
 
             function drawTextblock(block) {
                 if(typeof block.lIns === 'undefined') block.lIns = 91440;
@@ -741,8 +855,8 @@
             return ret;
         }
 
-        function drawPic(slide, idx, ctx) {
-            var pic = slide.commonSlideData.shapes[idx];
+        function drawPic(pic) {
+            var ctx = pic.canvas.getContext('2d');
             var img = media[pic.blip.embed];
         	if(typeof pic.blip.srcRect === 'undefined') pic.blip.srcRect = {l:0, r:0, t:0, b:0};
             var picx = img.width, picy = img.height;
@@ -755,9 +869,10 @@
             var dx = emu2pixel(offx), dy = emu2pixel(offy);
             var dw = emu2pixel(cx), dh = emu2pixel(cy);
             ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+            //pic.canvas.className = 'steps_canvas';
         }
 
-        function drawTransition(transition, target, next, mask) {
+        /*function drawTransition(transition, target, next, mask) {
             var start = null;
             requestAnimationFrame(transitionAnimate);
             function transitionAnimate(t) {
@@ -793,9 +908,9 @@
                     }
                 }
             }
-        }
+        }*/
 
-        function drawTransitionPattern(transition, mask, progress) {
+        /*function drawTransitionPattern(transition, mask, progress) {
             switch (transition.type) {
                 case 'comb':
                     var num = 8;
@@ -830,7 +945,7 @@
                     }
                     break;
             }
-        }
+        }*/
 
         function pt2pixel(sz) {
         	var screenw = presentationData.cw, canvasw = canvasData.cw;
@@ -857,7 +972,7 @@
 
         function define_quadratic_bezier(x0, y0, x1, y1, x2, y2) {
             return function (t) {
-                if (t < 0 || t > 1) throw "[define_quadratic_bezier] t must between 0 and 1.";
+                if (t < 0 || t > 1) throw new Error('[define_quadratic_bezier] t must between 0 and 1.');
                 var px = Math.pow(1 - t, 2) * x0 + 2 * t * (1 - t) * x1 + Math.pow(t, 2) * x2;
                 var py = Math.pow(1 - t, 2) * y0 + 2 * t * (1 - t) * y1 + Math.pow(t, 2) * y2;
                 return [px, py];
@@ -924,6 +1039,426 @@
         		ret = '0' + ret;
         	}
         	return ret;
+        }
+
+        function stepExecuter(step) {
+            anim_lock = true;
+            executers.shapes = data.slides[slideList[currentSlide].rid].commonSlideData.shapes;
+            executers.queues = {length:0, delay:[], duration:[], action:[]};
+            executers.actions = 0;
+            executers.orig = [];
+            executers.last = null;
+            stepParser(step);
+            if(!!executers.last && executers.last.name === 'p:set') {
+                var t = executers.shapes.filter(function(x) {return parseInt(x.id, 10) === parseInt(executers.last.tgtEl, 10)});
+                if(t.length > 0) {
+                    clearCanvas(t[0].canvas);
+                    drawShape(t[0]);
+                    render(data.slides[slideList[currentSlide].rid], canvas);
+                    anim_lock = false;
+                }
+            }
+        }
+
+        var executers = {
+            'p:par': function(node) {
+                anim_lock = true;
+                var self = this;
+                if(!!node.stCondLst) {
+                    node.stCondLst.forEach(function(cond) {
+                        if(!isNaN(parseInt(cond.delay, 10))) {
+                            if(node.nodeType === 'withGroup' || node.nodeType === 'afterGroup') {
+                                self.queues.delay.push(cond.delay);
+                            }
+                        }
+                    })
+                }
+            },
+            'p:seq': function(node) {
+                anim_lock = true;
+            },
+            'p:set': function(node) {
+                anim_lock = true;
+                var t = this.shapes.filter(function(s) {
+                    return !!s.id && !!node.tgtEl && parseInt(s.id, 10) === parseInt(node.tgtEl, 10);
+                });
+                if(t.length > 0) {
+                    var target = t[0];
+                    if(!!node.attrNameLst) {
+                        node.attrNameLst.forEach(function(a) {
+                            var t1 = a.val;
+                            var t2 = t1.split('.');
+                            for(var i=0; i< t2.length-1; i++) {
+                                target = target[t2[i]];
+                            }
+                            target[t2[t2.length-1]] = node.to;
+                            if(!!t[0].orig) {
+                                t[0].orig.style = {visibility: 'invisible'};
+                            } else {
+                                t[0].orig = {style: {visibility: 'invisible'}};
+                            }
+                        })
+                    }
+                }
+            },
+            'p:anim': function(node) {
+                anim_lock = true;
+                var spid = node.tgtEl;
+                var shape = data.slides[slideList[currentSlide].rid].commonSlideData.shapes.filter(function(x) {return parseInt(x.id, 10) === parseInt(spid, 10)})[0];
+                clearCanvas(shape.canvas);
+                drawShape(shape);
+                render(data.slides[slideList[currentSlide].rid], canvas);
+                executers.actions++;
+                anim_lock = false;
+            },
+            'p:animScale': function(node) {
+                anim_lock = true;
+                var self = this;
+                var spid = node.tgtEl;
+                var shape = data.slides[slideList[currentSlide].rid].commonSlideData.shapes.filter(function(x) {return parseInt(x.id, 10) === parseInt(spid, 10)})[0];
+                if(!!shape.orig) {
+                    shape.orig.x = shape.x;
+                    shape.orig.y = shape.y;
+                    shape.orig.cx = shape.cx;
+                    shape.orig.cy = shape.cy;
+                    shape.orig.textBody = clone(shape.textBody);
+                } else {
+                    shape.orig = {x: shape.x, y: shape.y, cx: shape.cx, cy: shape.cy, textBody: clone(shape.textBody)};
+                }
+                this.queues.duration.push(node.dur);
+                var duration = parseInt(node.dur, 10);
+                var ctrx = shape.x + shape.cx / 2;
+                var ctry = shape.y + shape.cy / 2;
+                var mid = duration / 2;
+                var ratex = node.by.x / 100000;
+                var ratey = node.by.y / 100000;
+                var start = null;
+                setTimeout(function() {
+                    anim_lock = true;
+                    requestAnimationFrame(animScale);
+                }, executers.queues.delay[executers.actions]);
+                executers.actions++;
+                function animScale(ts) {
+                    anim_lock = true;
+                    if(start === null) {
+                        start = ts;
+                        var now = 0;
+                    } else {
+                        var now = ts - start;
+                    }
+                    if(now < duration) {
+                        if(now < mid) {
+                            var ratecx = (1 + (now / mid * (ratex-1))) * shape.orig.cx;
+                            var ratecy = (1 + (now / mid * (ratey-1))) * shape.orig.cy;
+                            var nowx = ctrx - ratecx / 2;
+                            var nowy = ctry - ratecy / 2;
+                            var ratesz = (1 + (now / mid * (ratex-1)));
+                            shape.textBody.paragraphs.forEach(function(p, idxp) {
+                                p.runs.forEach(function(r, idxr) {
+                                    r.sz = Math.round(parseInt(shape.orig.textBody.paragraphs[idxp].runs[idxr].sz, 10) * ratesz);
+                                });
+                            });
+                        } else {
+                            var ratecx = (1 + (1 - (now - mid) / mid) * (ratex-1)) * shape.orig.cx;
+                            var ratecy = (1 + (1 - (now - mid) / mid) * (ratey-1)) * shape.orig.cy;
+                            var nowx = ctrx - ratecx / 2;
+                            var nowy = ctry - ratecy / 2;
+                            var ratesz = (1 + (1 - (now - mid) / mid) * (ratex-1));
+                            shape.textBody.paragraphs.forEach(function(p, idxp) {
+                                p.runs.forEach(function(r, idxr) {
+                                    r.sz = Math.round(parseInt(shape.orig.textBody.paragraphs[idxp].runs[idxr].sz, 10) * ratesz);
+                                });
+                            });
+                        }
+                        shape.x = nowx;
+                        shape.y = nowy;
+                        shape.cx = ratecx;
+                        shape.cy = ratecy;
+                        clearCanvas(shape.canvas);
+                        drawShape(shape);
+                        render(data.slides[slideList[currentSlide].rid], canvas);
+                        requestAnimationFrame(animScale);
+                    } else {
+                        /*self.orig.forEach(function(o) {
+                            if(o.id === shape.id) {
+                                Object.keys(o).forEach(function(p) {
+                                    if(p !== 'id') {
+                                        shape[p] = o[p];
+                                    }
+                                });
+                            }
+                        });*/
+                        clearCanvas(shape.canvas);
+                        drawShape(shape);
+                        render(data.slides[slideList[currentSlide].rid], canvas);
+                        anim_lock = false;
+                    }
+                }
+            },
+            'p:animMotion': function(node) {
+                anim_lock = true;
+                var spid = node.tgtEl;
+                var shape = data.slides[slideList[currentSlide].rid].commonSlideData.shapes.filter(function(x) {return parseInt(x.id, 10) === parseInt(spid, 10)})[0];
+                if(!!shape.orig) {
+                    shape.orig.x = shape.x;
+                    shape.orig.y = shape.y;
+                } else {
+                    shape.orig = {x: shape.x, y: shape.y};
+                }
+
+                var a = node.path.trim().split(' ');
+                var ax = a[a.length-2] * data.presentation.slideSize.cx;
+                var ay = a[a.length-1] * data.presentation.slideSize.cy;
+                var start = null;
+                var duration = node.dur;
+                setTimeout(function() {
+                    anim_lock = true;
+                    requestAnimationFrame(animMotion);
+                }, executers.queues.delay[executers.actions]);
+                executers.actions++;
+                function animMotion(ts) {
+                    if(!!start) {
+                        var now = ts - start;
+                    } else {
+                        start = ts;
+                        var now = 0;
+                    }
+                    if(now < duration) {
+                        shape.x = shape.orig.x + now / duration * ax;
+                        shape.y = shape.orig.y + now / duration * ay;
+                        clearCanvas(shape.canvas);
+                        drawShape(shape);
+                        render(data.slides[slideList[currentSlide].rid], canvas);
+                        requestAnimationFrame(animMotion);
+                    } else {
+                        shape.x = shape.orig.x + ax;
+                        shape.y = shape.orig.y + ay;
+                        clearCanvas(shape.canvas);
+                        drawShape(shape);
+                        render(data.slides[slideList[currentSlide].rid], canvas);
+                        /*shape.x = orig.x;
+                        shape.y = orig.y;*/
+                        anim_lock = false;
+                    }
+                }
+            },
+            'p:animEffect': function(node) {
+                anim_lock = true;
+                var adj = 914400/15;
+                var transitions = {
+                    'in': {
+                        'slide(fromLeft)': function(ts) {
+                            anim_lock = true;
+                            if(!!start) {
+                                var now = ts - start;
+                            } else {
+                                start = ts;
+                                var now = 0;
+                            }
+                            if(now < duration) {
+                                shape.x = shape.orig.x - shape.cx + now / duration * shape.cx;
+                                clearCanvas(shape.canvas);
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                requestAnimationFrame(transitions[node.transition][node.filter]);
+                            } else {
+                                shape.x = shape.orig.x;
+                                clearCanvas(shape.canvas);
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                anim_lock = false;
+                            }
+                        },
+                        'slide(fromRight)': function(ts) {
+                            anim_lock = true;
+                            if(!!start) {
+                                var now = ts - start;
+                            } else {
+                                start = ts;
+                                var now = 0;
+                            }
+                            if(now < duration) {
+                                shape.x = shape.orig.x + shape.cx - now / duration * shape.cx;
+                                clearCanvas(shape.canvas);
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                requestAnimationFrame(transitions[node.transition][node.filter]);
+                            } else {
+                                shape.x = shape.orig.x;
+                                clearCanvas(shape.canvas);
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                anim_lock = false;
+                            }
+                        },
+                        'slide(fromTop)': function(ts) {
+                            anim_lock = true;
+                            if(!!start) {
+                                var now = ts - start;
+                            } else {
+                                start = ts;
+                                var now = 0;
+                            }
+                            if(now < duration) {
+                                shape.y = shape.orig.y - shape.cy + now / duration * shape.cy;
+                                clearCanvas(shape.canvas);
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                requestAnimationFrame(transitions[node.transition][node.filter]);
+                            } else {
+                                shape.y = shape.orig.y;
+                                clearCanvas(shape.canvas);
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                anim_lock = false;
+                            }
+                        },
+                        'slide(fromBottom)': function(ts) {
+                            anim_lock = true;
+                            if(!!start) {
+                                var now = ts - start;
+                            } else {
+                                start = ts;
+                                var now = 0;
+                            }
+                            if(now < duration) {
+                                shape.y = shape.orig.y + shape.cy - now / duration * shape.cy;
+                                clearCanvas(shape.canvas);
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                requestAnimationFrame(transitions[node.transition][node.filter]);
+                            } else {
+                                shape.y = shape.orig.y;
+                                clearCanvas(shape.canvas);
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                anim_lock = false;
+                            }
+                        },
+                        'fade': function(ts) {
+                            anim_lock = true;
+                            if(!!start) {
+                                var now = ts - start;
+                            } else {
+                                start = ts;
+                                var now = 0;
+                            }
+                            if(now < duration) {
+                                shape.canvas.getContext('2d').globalAlpha = 0;
+                                clearCanvas(shape.canvas);
+                                shape.canvas.getContext('2d').globalAlpha = now / duration;
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                requestAnimationFrame(transitions[node.transition][node.filter]);
+                            } else {
+                                shape.x = shape.orig.x;
+                                shape.y = shape.orig.y;
+                                shape.canvas.getContext('2d').globalAlpha = 0;
+                                clearCanvas(shape.canvas);
+                                shape.canvas.getContext('2d').globalAlpha = 1;
+                                drawShape(shape);
+                                render(data.slides[slideList[currentSlide].rid], canvas);
+                                anim_lock = false;
+                            }
+                        }
+                    }
+                };
+
+                var spid = node.tgtEl;
+                var shape = data.slides[slideList[currentSlide].rid].commonSlideData.shapes.filter(function(x) {return parseInt(x.id, 10) === parseInt(spid, 10)})[0];
+                if(!!shape.orig) {
+                    shape.orig.x = shape.x;
+                    shape.orig.y = shape.y;
+                } else {
+                    shape.orig = {x: shape.x, y: shape.y};
+                }
+                if(!transitions[node.transition] || (!!transitions[node.transition] && !transitions[node.transition][node.filter])) {
+                    throw new Error('Specified transition or filter not supported:[' + node.transition + ',' + node.filter + ']');
+                }
+                var duration = node.dur;
+                var start = null;
+                setTimeout(function() {
+                    anim_lock = true;
+                    requestAnimationFrame(transitions[node.transition][node.filter]);
+                }, executers.queues.delay[executers.actions]);
+                executers.actions++;
+            }
+        };
+
+        function stepParser(node) {
+            if(!!executers[node.name]) {
+                executers[node.name](node);
+                executers.last = node;
+            } else {
+                throw new Error('executer for ' + node.name + ' not found.');
+            }
+            if(!!node.childTnLst) {
+                node.childTnLst.forEach(function(child) {
+                    stepParser(child);
+                });
+            }
+        }
+
+        function createCanvas(slide) {
+            var ret = document.createElement('canvas');
+            ret.width = canvasData.cw;
+            ret.height = canvasData.ch;
+            ret.className = 'steps_canvas_hidden';
+            if(!!slide) {
+                ret.style.backgroundColor = 'white';
+            }
+            document.getElementById('panel').appendChild(ret);
+            return ret;
+        }
+
+        function clearCanvas(canvas) {
+            var ctx = canvas.getContext('2d');
+            var d = ctx.createImageData(canvasData.cw, canvasData.ch);
+            ctx.putImageData(d, 0, 0);
+            d = null;
+        }
+
+        function removeTempCanvas(canvas) {
+            document.getElementById('panel').removeChild(canvas);
+        }
+
+        function render(slide, to) {
+            var ctx2 = buffer.getContext('2d');
+            slide.commonSlideData.shapes.forEach(function(shape) {
+                if(!!shape.style && !!shape.style.visibility && shape.style.visibility === 'invisible') {
+                } else {
+                    ctx2.drawImage(shape.canvas, 0, 0, canvasData.cw, canvasData.ch);
+                }
+            });
+            var im = buffer.getContext('2d').getImageData(0, 0, canvasData.cw, canvasData.ch);
+            to.getContext('2d').putImageData(im, 0, 0);
+            //stepsCanvas[currentStep] = im;
+        }
+
+        //from http://stackoverflow.com/questions/728360/how-do-i-correctly-clone-a-javascript-object
+        function clone(obj) {
+            var copy;
+            if(null == obj || "object" !== typeof obj) return obj;
+            if(obj instanceof Date) {
+                copy = new Date();
+                copy.setTime(obj.getTime());
+                return copy;
+            }
+            if(Array.isArray(obj)) {
+                copy = [];
+                obj.forEach(function(a, i) {
+                    copy[i] = clone(a);
+                });
+                return copy;
+            }
+            if(obj instanceof Object) {
+                copy = {};
+                Object.keys(obj).forEach(function(p) {
+                    copy[p] = clone(obj[p]);
+                });
+                return copy;
+            }
+            throw new Error("Unable to copy obj! Its type isn't supported.");
         }
     });
 </script>

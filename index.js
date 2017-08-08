@@ -72,7 +72,7 @@ zip.on('ready', () => {
 			});
 			if(argv['m'] === 1) {
 				let data = require('node-pptx-parser')(result);
-				fs.writeFile(argv._[1] + path.sep + 'main.js', 'var data = ' + JSON.stringify(data, null, 2), {encoding: 'utf-8'}, err => {
+				fs.writeFile(argv._[1] + path.sep + 'main.js', 'var data = ' + JSON.stringify(data), {encoding: 'utf-8'}, err => {
 					if(!!err) return reject(err);
 					console.log('writing ' + argv._[1] + path.sep + 'main.js');
 					let rs = fs.createReadStream(__dirname + path.sep + 'template.html', {encoding:'utf-8'});
